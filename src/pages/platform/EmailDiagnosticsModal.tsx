@@ -8,6 +8,7 @@ interface EmailStatus {
   provider: 'brevo' | 'resend' | 'smtp' | 'log';
   from: string | null;
   fromName: string;
+  keyHint: string | null;
   verification: { ok: boolean; detail: string };
 }
 
@@ -40,6 +41,7 @@ export function EmailDiagnosticsModal({ opened, onClose }: { opened: boolean; on
               <Badge variant="light" color={status.data.provider === 'log' ? 'gray' : 'slateBlue'}>{PROVIDER_LABELS[status.data.provider]}</Badge>
             </Group>
             <Text fz="sm"><b>Remetente:</b> {status.data.from ? `${status.data.fromName} <${status.data.from}>` : '—'}</Text>
+            {status.data.keyHint && <Text fz="sm"><b>Chave configurada:</b> <Text span ff="monospace" fz="sm">{status.data.keyHint}</Text></Text>}
             <Alert color={status.data.verification.ok ? 'forest' : 'red'} variant="light">{status.data.verification.detail}</Alert>
           </Stack>
         )}
