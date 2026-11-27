@@ -13,8 +13,8 @@ import { EmptyState, Field, LoadingBlock, PageHeader, StatusBadge } from '../../
 import { notifyError, notifySuccess } from '../../components/notify';
 import { formatArea, formatCar, formatDateTime, maskCnae } from '../../lib/masks';
 import { formatDocument } from '../../lib/shared';
-import { MapView } from '../../map/MapView';
 import { NotFoundPage } from '../NotFoundPage';
+import { AreasCard } from './AreasCard';
 
 /** Equipe atribuída ao empreendimento (define o acesso de técnicos de campo). */
 function TeamPanel({ enterprise }: { enterprise: Enterprise }) {
@@ -89,7 +89,6 @@ export function EnterpriseDetailPage() {
 
   if (isLoading) return <LoadingBlock />;
   if (error || !e) return <NotFoundPage />;
-  const hasPoint = e.latitude != null && e.longitude != null;
   const land = [e.carNumber, e.propertyRegistration, e.registryOffice, e.ccirNumber, e.nirfNumber, e.sigefCode, e.municipalPropertyRegistration].some(Boolean);
 
   const confirmToggle = () =>
@@ -186,21 +185,7 @@ export function EnterpriseDetailPage() {
             </Grid.Col>
 
             <Grid.Col span={{ base: 12, lg: 5 }}>
-              <Card withBorder padding="lg">
-                <Title order={5} mb="sm">Localização</Title>
-                {hasPoint ? (
-                  <>
-                    <MapView height={340} initialBasemap="satellite" selected={{ latitude: e.latitude!, longitude: e.longitude! }} />
-                    <SimpleGrid cols={2} mt="sm">
-                      <Field label="Latitude">{e.latitude?.toFixed(7)}</Field>
-                      <Field label="Longitude">{e.longitude?.toFixed(7)}</Field>
-                    </SimpleGrid>
-                    {e.utmZone && <Text fz="xs" c="dimmed" mt="xs">{e.utmZone.label} (EPSG:{e.utmZone.epsg})</Text>}
-                  </>
-                ) : (
-                  <EmptyState>Localização não informada.</EmptyState>
-                )}
-              </Card>
+              <AreasCard enterprise={e} />
             </Grid.Col>
           </Grid>
         </Tabs.Panel>

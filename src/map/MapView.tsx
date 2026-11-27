@@ -1,5 +1,5 @@
 import { SegmentedControl } from '@mantine/core';
-import maplibregl, { type Map as MlMap, type Marker } from 'maplibre-gl';
+import maplibregl, { type GeoJSONSource, type Map as MlMap, type Marker } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { BASEMAPS, BRAZIL_CENTER, buildStyle } from './basemaps';
 
@@ -22,12 +22,14 @@ interface Props {
   onPointClick?: (point: MapPoint) => void;
   /** Centraliza o mapa num ponto/zoom sempre que `key` mudar (ex.: ponto obtido pelo endereço). */
   focus?: { longitude: number; latitude: number; zoom: number; key: number } | null;
+  /** Polígonos (áreas) desenhados com a cor do tipo; o mapa é enquadrado neles na primeira exibição. */
+  polygons?: Array<{ id: string; geometry: { type: 'Polygon'; coordinates: number[][][] }; color: string }>;
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** Mapa MapLibre com alternância Mapa/Satélite, marcadores e seleção de ponto por clique. */
-export function MapView({ height = 400, points = [], selected, onPick, initialBasemap = 'streets', onPointClick, focus }: Props) {
+export function MapView({ height = 400, points = [], selected, onPick, initialBasemap = 'streets', onPointClick, focus, polygons }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const markers = useRef<Marker[]>([]);
@@ -123,6 +125,34 @@ export function MapView({ height = 400, points = [], selected, onPick, initialBa
       selectedMarker.current.setLngLat([selected.longitude, selected.latitude]);
     }
   }, [selected?.latitude, selected?.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polígonos
+  const polygonsFitted = useRef(false);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !polygons) return;
+    const apply = () => {
+      const data = {
+        type: 'FeatureCollection' as const,
+        features: polygons.map((p) => ({ type: 'Feature' as const, geometry: p.geometry, properties: { id: p.id, color: p.color } })),
+      };
+      const source = m.getSource('polygons') as GeoJSONSource | undefined;
+      if (source) source.setData(data);
+      else {
+        m.addSource('polygons', { type: 'geojson', data });
+        m.addLayer({ id: 'polygons-fill', type: 'fill', source: 'polygons', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 } });
+        m.addLayer({ id: 'polygons-line', type: 'line', source: 'polygons', paint: { 'line-color': ['get', 'color'], 'line-width': 2 } });
+      }
+      if (polygons.length && !polygonsFitted.current) {
+        polygonsFitted.current = true;
+        const bounds = new maplibregl.LngLatBounds();
+        polygons.forEach((p) => p.geometry.coordinates[0].forEach(([x, y]) => bounds.extend([x, y])));
+        m.fitBounds(bounds, { padding: 40, maxZoom: 18, duration: 0 });
+      }
+    };
+    if (m.isStyleLoaded()) apply();
+    else m.once('load', apply);
+  }, [polygons]);
 
   // Centralização solicitada pelo formulário
   useEffect(() => {

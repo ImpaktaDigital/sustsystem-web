@@ -2,7 +2,7 @@ import { AppShell, Avatar, Burger, Group, Menu, NavLink, ScrollArea, Stack, Text
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconBuildingCommunity, IconBuildingFactory2, IconChevronDown, IconLayoutDashboard, IconLogout, IconSwitchHorizontal,
-  IconUserCircle, IconUsers, IconUsersGroup,
+  IconUserCircle, IconPolygon, IconUsers, IconUsersGroup,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { to: '/clientes', label: 'Clientes', icon: <IconBuildingCommunity size={18} />, permissions: ['clients.read'] },
   { to: '/empreendimentos', label: 'Empreendimentos', icon: <IconBuildingFactory2 size={18} />, permissions: ['enterprises.read'] },
   { to: '/usuarios', label: 'Equipe e usuários', icon: <IconUsers size={18} />, permissions: ['users.read'] },
+  { to: '/configuracoes/tipos-de-area', label: 'Tipos de área', icon: <IconPolygon size={18} />, permissions: ['area_types.manage'] },
 ];
 
 const PLATFORM_NAV: NavItem[] = [

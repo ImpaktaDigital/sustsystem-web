@@ -131,6 +131,27 @@ export async function request<T>(method: string, path: string, opts: RequestOpti
   return data as T;
 }
 
+/** Baixa um arquivo da API (com autenticação) e dispara o download no navegador. */
+export async function download(path: string, query?: RequestOptions['query'], retry = true): Promise<void> {
+  if (!accessToken && storage.get()) await refreshSession();
+  const qs = query ? '?' + new URLSearchParams(Object.entries(query).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)])).toString() : '';
+  const res = await fetch(`${API_URL}/api/v1${path}${qs}`, { headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {} });
+  if (res.status === 401 && retry && (await refreshSession())) return download(path, query, false);
+  if (!res.ok) {
+    const text = await res.text();
+    let body: unknown;
+    try { body = JSON.parse(text); } catch { body = undefined; }
+    throw new ApiError(res.status, errorMessage(body, res.status), body);
+  }
+  const name = res.headers.get('content-disposition')?.match(/filename="?([^"]+)"?/)?.[1] ?? 'arquivo';
+  const url = URL.createObjectURL(await res.blob());
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const api = {
   get: <T>(path: string, query?: RequestOptions['query']) => request<T>('GET', path, { query }),
   post: <T>(path: string, body?: unknown, auth = true) => request<T>('POST', path, { body, auth }),

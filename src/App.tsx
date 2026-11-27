@@ -12,12 +12,14 @@ import { ClientDetailPage } from './pages/clients/ClientDetailPage';
 import { ClientFormPage } from './pages/clients/ClientFormPage';
 import { ClientsPage } from './pages/clients/ClientsPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { EditorPage } from './pages/editor/EditorPage';
 import { EnterpriseDetailPage } from './pages/enterprises/EnterpriseDetailPage';
 import { EnterpriseFormPage } from './pages/enterprises/EnterpriseFormPage';
 import { EnterprisesPage } from './pages/enterprises/EnterprisesPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { OrganizationsPage } from './pages/platform/OrganizationsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { AreaTypesPage } from './pages/settings/AreaTypesPage';
 import { UsersPage } from './pages/users/UsersPage';
 
 function FullScreenLoader() {
@@ -59,6 +61,9 @@ export function App() {
       <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
       <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
 
+      {/* Editor geográfico em tela cheia (fora do layout com menu lateral) */}
+      <Route path="/empreendimentos/:id/editor" element={<RequireAuth><Guard permissions={['enterprises.read']}><EditorPage /></Guard></RequireAuth>} />
+
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route index element={<DashboardPage />} />
         <Route path="clientes" element={<Guard permissions={['clients.read']}><ClientsPage /></Guard>} />
@@ -69,6 +74,7 @@ export function App() {
         <Route path="empreendimentos/novo" element={<Guard permissions={['enterprises.write']}><EnterpriseFormPage /></Guard>} />
         <Route path="empreendimentos/:id" element={<Guard permissions={['enterprises.read']}><EnterpriseDetailPage /></Guard>} />
         <Route path="empreendimentos/:id/editar" element={<Guard permissions={['enterprises.write']}><EnterpriseFormPage /></Guard>} />
+        <Route path="configuracoes/tipos-de-area" element={<Guard permissions={['area_types.manage']}><AreaTypesPage /></Guard>} />
         <Route path="usuarios" element={<Guard permissions={['users.read']}><UsersPage /></Guard>} />
         <Route path="plataforma/organizacoes" element={<Guard platform><OrganizationsPage /></Guard>} />
         <Route path="perfil" element={<ProfilePage />} />

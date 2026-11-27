@@ -15,6 +15,13 @@ const ACTION_LABELS: Record<string, string> = {
   update_contact: 'Contato alterado',
   remove_contact: 'Contato removido',
   set_assignments: 'Equipe atribuída alterada',
+  area_create: 'Área delimitada',
+  area_version: 'Nova versão de área',
+  area_validate: 'Versão de área validada',
+  area_update: 'Dados de área alterados',
+  area_archive: 'Área arquivada',
+  area_restore: 'Área restaurada',
+  areas_export: 'Áreas exportadas',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -30,6 +37,11 @@ function describe(log: AuditLog) {
   if (log.action === 'update') {
     const fields = Object.keys(d).map((k) => FIELD_LABELS[k] ?? k);
     return fields.length ? `Campos: ${fields.join(', ')}` : null;
+  }
+  if (log.action === 'areas_export') return `${String(d.format).toUpperCase()} — versões ${d.source === 'validated' ? 'validadas' : 'atuais'} (${d.count} área(s))`;
+  if (typeof d.areaId === 'string') {
+    const ha = typeof d.areaM2 === 'number' ? ` · ${(d.areaM2 / 10_000).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ha` : '';
+    return `${String(d.name)}${typeof d.version === 'number' ? ` — V${d.version}` : ''}${ha}`;
   }
   if (typeof d.name === 'string') return String(d.name);
   return null;

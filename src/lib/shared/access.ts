@@ -31,6 +31,12 @@ export const PERMISSIONS = [
   'enterprises.write',
   /** Atribuir membros da equipe a empreendimentos. */
   'enterprises.assign',
+  /** Desenhar, importar e editar áreas (novas versões) dos empreendimentos visíveis. */
+  'areas.write',
+  /** Validar versão de área (revisão técnica) — a versão validada alimenta a planta. */
+  'areas.validate',
+  /** Configurar os tipos de área da organização. */
+  'area_types.manage',
   'audit.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -39,10 +45,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ADMIN: PERMISSIONS,
   MANAGER: [
     'users.read', 'clients.read', 'clients.write',
-    'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'enterprises.assign', 'audit.read',
+    'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'enterprises.assign',
+    'areas.write', 'area_types.manage', 'audit.read',
   ],
-  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write'],
-  FIELD_TECH: ['enterprises.read'],
+  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'areas.write', 'areas.validate'],
+  FIELD_TECH: ['enterprises.read', 'areas.write'],
   CLIENT: [],
 };
 

@@ -173,3 +173,59 @@ export interface EnterpriseFeatureCollection {
     properties: { id: string; name: string; status: RecordStatus; clientName: string };
   }>;
 }
+
+// ───────────── Áreas (Parte 3) ─────────────
+
+export type AreaSourceMethod = 'MANUAL_WEB' | 'VERTEX_LIST' | 'IMPORT_FILE' | 'GPS_VERTICES' | 'GPS_WALK';
+
+export const SOURCE_METHOD_LABELS: Record<AreaSourceMethod, string> = {
+  MANUAL_WEB: 'Desenho no mapa',
+  VERTEX_LIST: 'Coordenadas digitadas',
+  IMPORT_FILE: 'Importação de arquivo',
+  GPS_VERTICES: 'Vértices por GPS',
+  GPS_WALK: 'Percurso GPS',
+};
+
+export interface PolygonGeometry {
+  type: 'Polygon';
+  coordinates: number[][][];
+}
+
+export interface AreaType {
+  id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  sortOrder: number;
+  status: RecordStatus;
+  areaCount?: number;
+}
+
+export interface AreaVersion {
+  id: string;
+  version: number;
+  geometry: PolygonGeometry;
+  areaM2: number;
+  perimeterM: number;
+  vertexCount: number;
+  sourceMethod: AreaSourceMethod;
+  coordinateSystem: string | null;
+  notes: string | null;
+  createdAt: string;
+  createdBy: { id: string | null; name: string | null } | null;
+  validatedAt: string | null;
+  validatedBy: { id: string | null; name: string | null } | null;
+}
+
+export interface Area {
+  id: string;
+  enterpriseId: string;
+  name: string;
+  notes: string | null;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
+  areaType: { id: string; name: string; color: string };
+  currentVersion: AreaVersion;
+  validatedVersion: number | null;
+}
