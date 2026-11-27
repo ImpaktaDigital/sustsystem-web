@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ActionIcon, Button, Card, Divider, Drawer, Group, Menu, Modal, Pagination, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
-import { IconBuildingOff, IconBuildingCommunity, IconDots, IconEye, IconPencil, IconPlus, IconSearch } from '@tabler/icons-react';
+import { IconBuildingOff, IconBuildingCommunity, IconDots, IconEye, IconMail, IconPencil, IconPlus, IconSearch } from '@tabler/icons-react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -13,6 +13,7 @@ import { EmptyState, LoadingBlock, PageHeader, StatusBadge } from '../../compone
 import { notifyError, notifySuccess } from '../../components/notify';
 import { formatDateTime, maskCnpj } from '../../lib/masks';
 import { formatDocument, isValidCnpj, onlyDigits } from '../../lib/shared';
+import { EmailDiagnosticsModal } from './EmailDiagnosticsModal';
 
 const PAGE_SIZE = 20;
 
@@ -122,6 +123,7 @@ export function OrganizationsPage() {
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState<{ open: boolean; org: Organization | null }>({ open: false, org: null });
   const [viewing, setViewing] = useState<string | null>(null);
+  const [emailDiag, setEmailDiag] = useState(false);
   const [debounced] = useDebouncedValue(search, 300);
 
   const { data, isLoading } = useQuery({
@@ -159,7 +161,12 @@ export function OrganizationsPage() {
       <PageHeader
         title="Organizações"
         description="Administração da plataforma — escritórios e empresas que usam o SustSystem"
-        actions={<Button leftSection={<IconPlus size={16} />} onClick={() => setModal({ open: true, org: null })}>Nova organização</Button>}
+        actions={
+          <>
+            <Button variant="default" leftSection={<IconMail size={16} />} onClick={() => setEmailDiag(true)}>Diagnóstico de e-mail</Button>
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setModal({ open: true, org: null })}>Nova organização</Button>
+          </>
+        }
       />
       <Card withBorder padding={0}>
         <Group p="md">
@@ -219,6 +226,7 @@ export function OrganizationsPage() {
       </Card>
       <OrganizationModal org={modal.org} opened={modal.open} onClose={() => setModal({ open: false, org: null })} />
       <OrganizationDrawer id={viewing} onClose={() => setViewing(null)} />
+      <EmailDiagnosticsModal opened={emailDiag} onClose={() => setEmailDiag(false)} />
     </>
   );
 }
