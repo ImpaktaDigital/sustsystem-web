@@ -1,0 +1,51 @@
+/**
+ * Perfis e permissões.
+ *
+ * O documento (seção 3) recomenda permissões configuráveis, não presas a papéis fixos.
+ * Nesta fase as permissões são granulares e os papéis são apenas "pacotes padrão" delas;
+ * a configuração por organização (tabelas roles/permissions) entra numa etapa posterior
+ * sem mudar a forma como o código verifica acesso (sempre por permissão).
+ */
+
+export const ROLES = ['ADMIN', 'MANAGER', 'ENGINEER', 'FIELD_TECH', 'CLIENT'] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: 'Administrador',
+  MANAGER: 'Gestor de projetos',
+  ENGINEER: 'Engenheiro / Responsável técnico',
+  FIELD_TECH: 'Técnico de campo',
+  CLIENT: 'Cliente',
+};
+
+export const PERMISSIONS = [
+  'organization.manage',
+  'users.read',
+  'users.manage',
+  'clients.read',
+  'clients.write',
+  /** Consultar empreendimentos (sem `read_all`, apenas os atribuídos ou sob sua responsabilidade). */
+  'enterprises.read',
+  /** Consultar todos os empreendimentos da organização. */
+  'enterprises.read_all',
+  'enterprises.write',
+  /** Atribuir membros da equipe a empreendimentos. */
+  'enterprises.assign',
+  'audit.read',
+] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+export const DEFAULT_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
+  ADMIN: PERMISSIONS,
+  MANAGER: [
+    'users.read', 'clients.read', 'clients.write',
+    'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'enterprises.assign', 'audit.read',
+  ],
+  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write'],
+  FIELD_TECH: ['enterprises.read'],
+  CLIENT: [],
+};
+
+export function permissionsFor(role: Role): readonly Permission[] {
+  return DEFAULT_ROLE_PERMISSIONS[role] ?? [];
+}
