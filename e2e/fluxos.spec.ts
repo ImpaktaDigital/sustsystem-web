@@ -176,6 +176,7 @@ test('administrador convida membro e vê histórico', async ({ page }) => {
 test('operador da plataforma gerencia organizações', async ({ page }) => {
   await login(page, 'plataforma@sustsystem.dev');
   await page.getByRole('link', { name: 'Organizações' }).click();
+  await page.getByRole('textbox', { name: 'Buscar organizações' }).fill('Escritório Demo Engenharia');
   await expect(page.getByRole('cell', { name: /Escritório Demo Engenharia Ambiental/ }).first()).toBeVisible();
   await shot(page, '11-plataforma');
 });

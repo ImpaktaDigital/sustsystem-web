@@ -4,8 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import type { Area, PolygonGeometry } from '../../api/types';
 import type { LngLat } from '../../lib/geodesy';
 import { BASEMAPS, BRAZIL_CENTER, buildStyle } from '../../map/basemaps';
+import { symbolSvg, type SymbolShape } from '../../lib/symbols';
 
-export type EditorMode = 'view' | 'draw' | 'edit' | 'measure';
+export type EditorMode = 'view' | 'draw' | 'edit' | 'measure' | 'place';
+
+export interface ElementMarker {
+  id: string;
+  name: string;
+  position: LngLat;
+  shape: SymbolShape;
+  color: string;
+  code: string;
+}
 
 interface Props {
   areas: Area[];
@@ -32,6 +42,15 @@ interface Props {
   onCursor: (point: LngLat | null) => void;
   fit: { key: number; bounds: [LngLat, LngLat] } | null;
   center: LngLat | null;
+  /** Elementos pontuais (símbolos). */
+  elements: ElementMarker[];
+  selectedElementId: string | null;
+  /** Elemento que pode ser arrastado (selecionado e editável). */
+  draggableElementId: string | null;
+  onSelectElement: (id: string) => void;
+  onMoveElement: (id: string, point: LngLat) => void;
+  /** Clique no mapa no modo "posicionar elemento". */
+  onPlace: (point: LngLat) => void;
 }
 
 const DRAFT_COLOR = '#f97316';
@@ -96,6 +115,7 @@ export function EditorMap(props: Props) {
         return;
       }
       if (p.mode === 'measure') return p.onMeasureAdd(point);
+      if (p.mode === 'place') return p.onPlace(point);
       if (p.mode === 'edit') return p.onSelectVertex(null);
       const hit = m.queryRenderedFeatures(e.point, { layers: ['areas-fill'] })[0];
       p.onSelectArea((hit?.properties?.id as string) ?? null);
@@ -146,7 +166,7 @@ export function EditorMap(props: Props) {
   // ── Cursor conforme o modo ──
   useEffect(() => {
     const m = map.current;
-    if (m) m.getCanvas().style.cursor = props.mode === 'draw' || props.mode === 'measure' ? 'crosshair' : '';
+    if (m) m.getCanvas().style.cursor = props.mode === 'draw' || props.mode === 'measure' || props.mode === 'place' ? 'crosshair' : '';
   }, [props.mode]);
 
   // ── Áreas ──
@@ -265,6 +285,39 @@ export function EditorMap(props: Props) {
       });
     }
   }, [props.ring, props.mode, props.closed, props.selectedVertex, props.showVertices, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Elementos pontuais ──
+  const elementMarkers = useRef<Marker[]>([]);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    elementMarkers.current.forEach((mk) => mk.remove());
+    elementMarkers.current = props.elements.map((el) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = `el-marker${el.id === props.selectedElementId ? ' el-selected' : ''}`;
+      wrapper.innerHTML = symbolSvg(el.shape, el.color, el.code, 24);
+      const label = document.createElement('span');
+      label.className = 'el-label';
+      label.textContent = el.name;
+      wrapper.appendChild(label);
+      wrapper.title = el.name;
+      wrapper.setAttribute('aria-label', `Elemento ${el.name}`);
+      const draggable = el.id === props.draggableElementId;
+      const mk = new maplibregl.Marker({ element: wrapper, draggable, anchor: 'center', offset: [0, 0] }).setLngLat(el.position).addTo(m);
+      let dragged = false;
+      wrapper.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (!dragged && latest.current.mode !== 'draw' && latest.current.mode !== 'measure') latest.current.onSelectElement(el.id);
+      });
+      mk.on('dragstart', () => (dragged = true));
+      mk.on('dragend', () => {
+        const ll = mk.getLngLat();
+        latest.current.onMoveElement(el.id, [ll.lng, ll.lat]);
+        setTimeout(() => (dragged = false), 0);
+      });
+      return mk;
+    });
+  }, [props.elements, props.selectedElementId, props.draggableElementId, ready]);
 
   // ── Enquadramento ──
   useEffect(() => {

@@ -9,6 +9,8 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  // Os testes compartilham o mesmo banco (seed) e renderizam mapas WebGL: execução em série
+  workers: 1,
   reporter: [['list']],
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',

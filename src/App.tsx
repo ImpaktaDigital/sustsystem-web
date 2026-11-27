@@ -20,6 +20,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { OrganizationsPage } from './pages/platform/OrganizationsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AreaTypesPage } from './pages/settings/AreaTypesPage';
+import { PlantGeneratorPage } from './pages/plants/PlantGeneratorPage';
 import { UsersPage } from './pages/users/UsersPage';
 
 function FullScreenLoader() {
@@ -74,6 +75,7 @@ export function App() {
         <Route path="empreendimentos/novo" element={<Guard permissions={['enterprises.write']}><EnterpriseFormPage /></Guard>} />
         <Route path="empreendimentos/:id" element={<Guard permissions={['enterprises.read']}><EnterpriseDetailPage /></Guard>} />
         <Route path="empreendimentos/:id/editar" element={<Guard permissions={['enterprises.write']}><EnterpriseFormPage /></Guard>} />
+        <Route path="empreendimentos/:id/plantas/nova" element={<Guard permissions={['enterprises.read', 'plants.issue']}><PlantGeneratorPage /></Guard>} />
         <Route path="configuracoes/tipos-de-area" element={<Guard permissions={['area_types.manage']}><AreaTypesPage /></Guard>} />
         <Route path="usuarios" element={<Guard permissions={['users.read']}><UsersPage /></Guard>} />
         <Route path="plataforma/organizacoes" element={<Guard platform><OrganizationsPage /></Guard>} />

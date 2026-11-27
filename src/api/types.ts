@@ -229,3 +229,102 @@ export interface Area {
   currentVersion: AreaVersion;
   validatedVersion: number | null;
 }
+
+// ───────────── Elementos pontuais e plantas (Parte 4) ─────────────
+
+export type SymbolShape = 'CIRCLE' | 'SQUARE' | 'TRIANGLE' | 'DIAMOND' | 'HEXAGON';
+
+export interface ElementType {
+  id: string;
+  name: string;
+  shape: SymbolShape;
+  code: string;
+  color: string;
+  description: string | null;
+  sortOrder: number;
+  status: RecordStatus;
+  elementCount?: number;
+}
+
+export interface MapElement {
+  id: string;
+  enterpriseId: string;
+  elementTypeId: string;
+  name: string;
+  specification: string | null;
+  notes: string | null;
+  latitude: number;
+  longitude: number;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
+  elementType: { id: string; name: string; shape: SymbolShape; code: string; color: string };
+}
+
+export type PlantKind = 'LOCATION' | 'DELIMITATION';
+
+export const PLANT_KIND_LABELS: Record<PlantKind, string> = {
+  LOCATION: 'Planta de localização',
+  DELIMITATION: 'Planta de delimitação',
+};
+
+export interface PlantSummary {
+  id: string;
+  kind: PlantKind;
+  revision: number;
+  title: string;
+  revisionNotes: string | null;
+  issueDate: string;
+  responsibleName: string;
+  sheetSize: string;
+  scaleDenominator: number;
+  crsEpsg: number;
+  createdAt: string;
+  issuedBy: { id: string; name: string } | null;
+}
+
+export interface PlantSnapshotArea {
+  areaId: string;
+  versionId: string;
+  version: number;
+  validated: boolean;
+  name: string;
+  typeName: string;
+  color: string;
+  sortOrder: number;
+  areaM2: number;
+  perimeterM: number;
+  vertexCount: number;
+  vertexTable: boolean;
+  geometry: PolygonGeometry;
+}
+
+export interface PlantSnapshotElement {
+  id: string;
+  name: string;
+  specification: string | null;
+  latitude: number;
+  longitude: number;
+  typeId: string;
+  typeName: string;
+  shape: SymbolShape;
+  code: string;
+  color: string;
+  sortOrder: number;
+}
+
+export interface PlantRecord extends PlantSummary {
+  layout: { basemap: 'satellite' | 'streets'; center: [number, number]; zone: number; hemisphere: 'N' | 'S' };
+  snapshot: {
+    organization: { name: string };
+    enterprise: {
+      id: string; name: string; code: string | null; street: string | null; number: string | null; district: string | null;
+      city: string | null; state: string | null; zipCode: string | null; carNumber: string | null; propertyRegistration: string | null;
+      latitude: number | null; longitude: number | null;
+    };
+    client: { name: string; tradeName: string | null; document: string };
+    versionSource: 'validated' | 'current';
+    areas: PlantSnapshotArea[];
+    elements: PlantSnapshotElement[];
+  };
+}

@@ -21,7 +21,7 @@ Para usar a API publicada a partir do `localhost`, o Render precisa ter `http://
 | `npm run build` | Build de produção (`dist/`) |
 | `npm run e2e` | Testes de ponta a ponta (Playwright). Exigem API local com seed e `npm run dev` rodando. Na primeira vez: `npx playwright install chromium` |
 
-## Telas (Partes 2 e 3)
+## Telas (Partes 2 a 4)
 
 | Rota | Tela |
 |---|---|
@@ -30,12 +30,18 @@ Para usar a API publicada a partir do `localhost`, o Render precisa ter `http://
 | `/clientes` | Lista, busca, cadastro PF/PJ, contatos, empreendimentos e histórico |
 | `/empreendimentos` | Lista com filtros, cadastro com localização no mapa, atividades, dados fundiários, equipe e histórico |
 | `/empreendimentos/:id/editor` | **Editor geográfico** (tela cheia): desenho e edição de polígonos, desfazer/refazer, medição, camadas por tipo, vértices em UTM/geográficas, colar coordenadas, importação (GeoJSON, KML, KMZ, Shapefile .zip), exportação (GeoJSON, KML), histórico de versões e validação técnica |
-| `/configuracoes/tipos-de-area` | Tipos de área da organização (nome, cor, ordem) |
+| `/empreendimentos/:id?aba=plantas` | Revisões de planta emitidas (novo download idêntico do PDF) |
+| `/empreendimentos/:id/plantas/nova` | **Gerador de planta** de localização ou delimitação: áreas (validadas ou atuais), quadro de vértices, elementos, folha/escala automáticas, carimbo (responsável técnico, data, revisão), prévia e emissão |
+| `/configuracoes/tipos-de-area` | Tipos de área (nome, cor) e tipos de elemento pontual (símbolo: forma, sigla e cor) |
 | `/usuarios` | Equipe: convites, perfis, desativação e exclusão (só sem registros) |
 | `/plataforma/organizacoes` | Operador da plataforma: organizações |
 | `/perfil` | Dados, troca de senha e de organização |
 
 O menu e as telas seguem as permissões do usuário. A API também valida todas elas.
+
+## Plantas em PDF
+
+Geradas no navegador ([src/plants/](src/plants/)) com pdf-lib: mapa de fundo renderizado fora da tela na resolução de impressão (150 dpi; 120 dpi em A1/A0) e todo o resto vetorial (áreas, vértices, símbolos, grade UTM, norte, barra de escala, legenda, quadros e carimbo). Folhas ABNT série A em paisagem com margens da NBR 10068; quadros de vértices que não cabem vão para folhas adicionais. A API guarda cada revisão com um retrato completo (versões imutáveis das áreas), por isso o PDF pode ser gerado de novo de forma idêntica — exceto pela imagem de fundo, que o provedor pode atualizar.
 
 ## Mapas
 

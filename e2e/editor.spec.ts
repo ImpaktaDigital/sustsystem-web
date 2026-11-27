@@ -19,6 +19,7 @@ async function login(page: Page, email: string) {
 
 async function openEditor(page: Page) {
   await page.getByRole('link', { name: 'Empreendimentos' }).first().click();
+  await page.getByPlaceholder(/Buscar por nome/).fill('Guarulhos');
   await page.getByText('Unidade Fabril Guarulhos').first().click();
   await expect(page.getByText('Áreas e localização')).toBeVisible();
   await expect(page.getByText('Galpão de produção')).toBeVisible();
@@ -32,6 +33,7 @@ async function openEditor(page: Page) {
 test.describe.configure({ mode: 'serial' });
 
 test('engenheira desenha, edita, valida, cola coordenadas, importa e exporta áreas', async ({ page }) => {
+  test.setTimeout(180_000);
   await login(page, 'engenheira@sustsystem.dev');
   await openEditor(page);
   await shot(page, '21-editor');

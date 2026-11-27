@@ -35,8 +35,10 @@ export const PERMISSIONS = [
   'areas.write',
   /** Validar versão de área (revisão técnica) — a versão validada alimenta a planta. */
   'areas.validate',
-  /** Configurar os tipos de área da organização. */
+  /** Configurar os tipos de área e de elemento pontual da organização. */
   'area_types.manage',
+  /** Emitir revisões de planta (PDF) com responsável técnico. */
+  'plants.issue',
   'audit.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -46,9 +48,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   MANAGER: [
     'users.read', 'clients.read', 'clients.write',
     'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'enterprises.assign',
-    'areas.write', 'area_types.manage', 'audit.read',
+    'areas.write', 'area_types.manage', 'plants.issue', 'audit.read',
   ],
-  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'areas.write', 'areas.validate'],
+  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'areas.write', 'areas.validate', 'plants.issue'],
   FIELD_TECH: ['enterprises.read', 'areas.write'],
   CLIENT: [],
 };

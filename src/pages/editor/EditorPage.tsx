@@ -3,13 +3,13 @@ import { useMediaQuery } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import {
   IconArrowBackUp, IconArrowForwardUp, IconArrowLeft, IconClipboardText, IconDownload, IconFileImport, IconPencil,
-  IconPolygon, IconRuler2, IconX,
+  IconMapPinPlus, IconPolygon, IconRuler2, IconX,
 } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError, download } from '../../api/client';
-import type { Area, AreaSourceMethod, AreaType, AreaVersion, Enterprise, PolygonGeometry } from '../../api/types';
+import type { Area, AreaSourceMethod, AreaType, AreaVersion, ElementType, Enterprise, MapElement, PolygonGeometry } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { LoadingBlock } from '../../components/common';
 import { notifyError, notifySuccess } from '../../components/notify';
@@ -18,7 +18,8 @@ import { centroid, formatMeters, lineLength, type LngLat } from '../../lib/geode
 import { NotFoundPage } from '../NotFoundPage';
 import { AreaPanel, type NewAreaForm } from './AreaPanel';
 import { CrsSelect } from './CrsSelect';
-import { EditorMap, type EditorMode } from './EditorMap';
+import { EditorMap, type EditorMode, type ElementMarker } from './EditorMap';
+import { ElementPanel, suggestName, SymbolIcon, type ElementForm } from './ElementPanel';
 import { ImportModal, type ImportItem } from './ImportModal';
 import { LayersPanel } from './LayersPanel';
 import { PasteCoordinatesModal } from './PasteCoordinatesModal';
@@ -61,7 +62,9 @@ const HINTS: Record<EditorMode, string> = {
   draw: 'Clique no mapa para adicionar vértices. Para fechar: clique no vértice 1, duplo clique ou Enter. Ctrl+Z desfaz.',
   edit: 'Arraste os vértices para ajustar. Clique (ou arraste) os pontos intermediários para inserir. Botão direito ou Delete remove o vértice selecionado.',
   measure: 'Clique para medir distâncias. Esc encerra a medição.',
+  place: 'Clique no mapa para posicionar o elemento. Esc cancela.',
 };
+const DRAFT_ELEMENT = '__novo__';
 
 /** Editor geográfico do empreendimento (Épico 06, seção 10.1): toolbar, mapa, painel lateral e rodapé. */
 export function EditorPage() {
@@ -79,6 +82,8 @@ export function EditorPage() {
   const enterpriseQ = useQuery({ queryKey: ['enterprise', id], queryFn: () => api.get<Enterprise>(`/enterprises/${id}`) });
   const areasQ = useQuery({ queryKey: ['areas', id], queryFn: () => api.get<Area[]>(`/enterprises/${id}/areas`, { includeArchived: true }) });
   const typesQ = useQuery({ queryKey: ['area-types'], queryFn: () => api.get<AreaType[]>('/area-types') });
+  const elementsQ = useQuery({ queryKey: ['elements', id], queryFn: () => api.get<MapElement[]>(`/enterprises/${id}/elements`, { includeArchived: true }) });
+  const elementTypesQ = useQuery({ queryKey: ['element-types'], queryFn: () => api.get<ElementType[]>('/element-types') });
 
   const [showArchived, setShowArchived] = useState(false);
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
@@ -96,6 +101,10 @@ export function EditorPage() {
   const [versionNotes, setVersionNotes] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [pasteFor, setPasteFor] = useState<'new' | 'replace' | null>(null);
+  const [hiddenElementTypes, setHiddenElementTypes] = useState<Set<string>>(new Set());
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [elementForm, setElementForm] = useState<ElementForm | null>(null);
+  const [placingTypeId, setPlacingTypeId] = useState<string | null>(null);
 
   const allAreas = useMemo(() => areasQ.data ?? [], [areasQ.data]);
   const listed = useMemo(() => allAreas.filter((a) => showArchived || a.status === 'ACTIVE'), [allAreas, showArchived]);
@@ -108,6 +117,25 @@ export function EditorPage() {
   const closed = editing ? geom.value.closed : !!selected;
   const holes = editing ? draft.holes : NO_HOLES;
   const dirty = editing && JSON.stringify(geom.value) !== draft.original;
+  const allElements = useMemo(() => elementsQ.data ?? [], [elementsQ.data]);
+  const listedElements = useMemo(() => allElements.filter((e) => showArchived || e.status === 'ACTIVE'), [allElements, showArchived]);
+  const selectedElement = allElements.find((e) => e.id === selectedElementId) ?? null;
+  const elementTypes = useMemo(() => elementTypesQ.data ?? [], [elementTypesQ.data]);
+  const elementMarkers = useMemo<ElementMarker[]>(() => {
+    const list: ElementMarker[] = listedElements
+      .filter((e) => !hiddenElementTypes.has(e.elementTypeId))
+      .map((e) => {
+        const editingThis = e.id === selectedElementId && !!elementForm;
+        const pos: LngLat = editingThis ? elementForm!.position : [e.longitude, e.latitude];
+        const t = editingThis ? elementTypes.find((x) => x.id === elementForm!.elementTypeId) ?? e.elementType : e.elementType;
+        return { id: e.id, name: editingThis ? elementForm!.name || e.name : e.name, position: pos, shape: t.shape, color: t.color, code: t.code };
+      });
+    if (elementForm && !selectedElementId) {
+      const t = elementTypes.find((x) => x.id === elementForm.elementTypeId);
+      if (t) list.push({ id: DRAFT_ELEMENT, name: elementForm.name || 'novo', position: elementForm.position, shape: t.shape, color: t.color, code: t.code });
+    }
+    return list;
+  }, [listedElements, hiddenElementTypes, selectedElementId, elementForm, elementTypes]);
   const enterprisePoint: LngLat | null = enterpriseQ.data?.longitude != null && enterpriseQ.data.latitude != null ? [enterpriseQ.data.longitude, enterpriseQ.data.latitude] : null;
 
   // Sistema de coordenadas inicial: UTM da zona do empreendimento (ou das áreas)
@@ -136,7 +164,18 @@ export function EditorPage() {
     queryClient.invalidateQueries({ queryKey: ['areas', id] });
     queryClient.invalidateQueries({ queryKey: ['area-types'] });
     queryClient.invalidateQueries({ queryKey: ['audit'] });
+    queryClient.invalidateQueries({ queryKey: ['elements', id] });
   };
+
+  const closeElement = () => {
+    setSelectedElementId(null);
+    setElementForm(null);
+    setPlacingTypeId(null);
+  };
+
+  const formOf = (e: MapElement): ElementForm => ({
+    elementTypeId: e.elementTypeId, name: e.name, specification: e.specification ?? '', notes: e.notes ?? '', position: [e.longitude, e.latitude],
+  });
 
   /** Executa a ação, pedindo confirmação se houver edição não salva. */
   const guard = (action: () => void) => {
@@ -167,6 +206,7 @@ export function EditorPage() {
     if (areaId === selectedId && !editing) return;
     guard(() => {
       stopEditing();
+      closeElement();
       setCompare(null);
       setSelectedId(areaId);
       if (areaId) {
@@ -179,6 +219,7 @@ export function EditorPage() {
 
   const startNew = (initial?: { ring: LngLat[]; sourceMethod: AreaSourceMethod; coordinateSystem?: string }) => {
     guard(() => {
+      closeElement();
       setSelectedId(null);
       setCompare(null);
       setMeasure([]);
@@ -334,6 +375,76 @@ export function EditorPage() {
     setTab('layers');
   };
 
+  // ── Elementos pontuais ──
+  const selectElement = (elementId: string, focus = false) => {
+    if (elementId === DRAFT_ELEMENT) return;
+    guard(() => {
+      stopEditing();
+      setSelectedId(null);
+      setCompare(null);
+      const el = allElements.find((e) => e.id === elementId);
+      if (!el) return;
+      setSelectedElementId(el.id);
+      setElementForm(formOf(el));
+      setTab('area');
+      if (focus) setFit({ key: Date.now(), bounds: [[el.longitude, el.latitude], [el.longitude, el.latitude]] });
+    });
+  };
+
+  const startPlacing = (typeId: string) => {
+    guard(() => {
+      stopEditing();
+      setSelectedId(null);
+      closeElement();
+      setPlacingTypeId(typeId);
+      setMode('place');
+    });
+  };
+
+  const placeElement = (p: LngLat) => {
+    const type = elementTypes.find((t) => t.id === placingTypeId);
+    if (!type) return;
+    setElementForm({ elementTypeId: type.id, name: suggestName(type, allElements), specification: '', notes: '', position: p });
+    setSelectedElementId(null);
+    setPlacingTypeId(null);
+    setMode('view');
+    setTab('area');
+  };
+
+  const moveElement = (elementId: string, p: LngLat) => {
+    if (elementForm && (elementId === DRAFT_ELEMENT || elementId === selectedElementId)) setElementForm({ ...elementForm, position: p });
+  };
+
+  const saveElement = useMutation({
+    mutationFn: () => {
+      const f = elementForm!;
+      const body = {
+        elementTypeId: f.elementTypeId, name: f.name.trim(),
+        specification: f.specification.trim() || (selectedElementId ? null : undefined), notes: f.notes.trim() || (selectedElementId ? null : undefined),
+        latitude: Math.round(f.position[1] * 1e7) / 1e7, longitude: Math.round(f.position[0] * 1e7) / 1e7,
+      };
+      return selectedElementId ? api.patch<MapElement>(`/elements/${selectedElementId}`, body) : api.post<MapElement>(`/enterprises/${id}/elements`, body);
+    },
+    onSuccess: (el) => {
+      queryClient.setQueryData<MapElement[]>(['elements', id], (list) => (list ? [...list.filter((e) => e.id !== el.id), el] : [el]));
+      refresh();
+      setSelectedElementId(el.id);
+      setElementForm(formOf(el));
+      notifySuccess(`Elemento ${el.name} salvo`);
+    },
+    onError: (e) => notifyError(e),
+  });
+
+  const archiveElement = useMutation({
+    mutationFn: (archiveIt: boolean) => api.post<MapElement>(`/elements/${selectedElementId}/${archiveIt ? 'archive' : 'restore'}`),
+    onSuccess: (el, archiveIt) => {
+      refresh();
+      notifySuccess(archiveIt ? `Elemento ${el.name} arquivado` : `Elemento ${el.name} restaurado`);
+      if (archiveIt && !showArchived) closeElement();
+    },
+    onError: (e) => notifyError(e),
+  });
+
   const exportAreas = (format: 'geojson' | 'kml', source: 'current' | 'validated') =>
     download(`/enterprises/${id}/areas/export`, { format, source }).catch((e) => notifyError(e));
 
@@ -349,6 +460,7 @@ export function EditorPage() {
       else if (mode === 'edit' && (e.key === 'Delete' || e.key === 'Backspace') && selectedVertex != null) { e.preventDefault(); removeVertex(selectedVertex); }
       else if (e.key === 'Escape') {
         if (mode === 'measure') { setMeasure([]); setMode(editing ? 'edit' : 'view'); }
+        else if (mode === 'place') { setPlacingTypeId(null); setMode('view'); }
         else if (mode === 'draw' && !geom.value.ring.length) stopEditing();
         else setSelectedVertex(null);
       }
@@ -358,7 +470,7 @@ export function EditorPage() {
   });
 
   if (enterpriseQ.isError) return <NotFoundPage />;
-  if (enterpriseQ.isLoading || areasQ.isLoading || typesQ.isLoading || !crs) return <LoadingBlock />;
+  if (enterpriseQ.isLoading || areasQ.isLoading || typesQ.isLoading || elementsQ.isLoading || !crs) return <LoadingBlock />;
   const enterprise = enterpriseQ.data!;
   const measureLength = lineLength(measure);
   const zone = { zone: crs.kind === 'utm' ? crs.zone! : suggestedUtm(enterprisePoint).zone!, hemisphere: crs.kind === 'utm' ? crs.hemisphere! : suggestedUtm(enterprisePoint).hemisphere! };
@@ -382,6 +494,17 @@ export function EditorPage() {
         {writable && (
           <>
             <Button size="xs" leftSection={<IconPolygon size={14} />} variant={mode === 'draw' ? 'filled' : 'light'} onClick={() => startNew()}>Nova área</Button>
+            <Menu position="bottom-start" withinPortal>
+              <Menu.Target>
+                <Button size="xs" leftSection={<IconMapPinPlus size={14} />} variant={mode === 'place' ? 'filled' : 'light'}>Elemento</Button>
+              </Menu.Target>
+              <Menu.Dropdown mah={420} style={{ overflowY: 'auto' }}>
+                <Menu.Label>Posicionar no mapa</Menu.Label>
+                {elementTypes.map((t) => (
+                  <Menu.Item key={t.id} leftSection={<SymbolIcon type={t} size={18} />} onClick={() => startPlacing(t.id)}>{t.name}</Menu.Item>
+                ))}
+              </Menu.Dropdown>
+            </Menu>
             <Button size="xs" variant={mode === 'edit' ? 'filled' : 'light'} leftSection={<IconPencil size={14} />} disabled={!selected || editing || selected.status !== 'ACTIVE'} onClick={() => startEdit()}>
               Editar vértices
             </Button>
@@ -440,6 +563,12 @@ export function EditorPage() {
             onCursor={publishCursor}
             fit={fit}
             center={enterprisePoint}
+            elements={elementMarkers}
+            selectedElementId={elementForm ? selectedElementId ?? DRAFT_ELEMENT : null}
+            draggableElementId={writable && elementForm && selectedElement?.status !== 'INACTIVE' ? selectedElementId ?? DRAFT_ELEMENT : null}
+            onSelectElement={(eid) => selectElement(eid)}
+            onMoveElement={moveElement}
+            onPlace={placeElement}
           />
           {(HINTS[mode] || inactiveEnterprise) && (
             <Paper shadow="sm" px="sm" py={6} radius="md" style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', maxWidth: 'min(640px, 90%)', zIndex: 2 }}>
@@ -460,12 +589,17 @@ export function EditorPage() {
           <Tabs value={tab} onChange={setTab} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
             <Tabs.List grow>
               <Tabs.Tab value="layers">Camadas ({listed.length})</Tabs.Tab>
-              <Tabs.Tab value="area">{editing && !draft?.areaId ? 'Nova área' : 'Área'}</Tabs.Tab>
-              <Tabs.Tab value="history" disabled={!selected}>Histórico</Tabs.Tab>
+              <Tabs.Tab value="area">{elementForm ? 'Elemento' : editing && !draft?.areaId ? 'Nova área' : 'Área'}</Tabs.Tab>
+              <Tabs.Tab value="history" disabled={!selected || !!elementForm}>Histórico</Tabs.Tab>
             </Tabs.List>
             <ScrollArea style={{ flex: 1 }} p="md">
               <Tabs.Panel value="layers">
                 <LayersPanel
+                  elements={listedElements}
+                  hiddenElementTypes={hiddenElementTypes}
+                  onToggleElementType={(t) => setHiddenElementTypes((prev) => { const n = new Set(prev); if (n.has(t)) n.delete(t); else n.add(t); return n; })}
+                  selectedElementId={selectedElementId}
+                  onSelectElement={(eid) => selectElement(eid, true)}
                   areas={listed}
                   hiddenTypes={hiddenTypes}
                   onToggleType={(t) => setHiddenTypes((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; })}
@@ -476,6 +610,20 @@ export function EditorPage() {
                 />
               </Tabs.Panel>
               <Tabs.Panel value="area">
+                {elementForm ? (
+                  <ElementPanel
+                    element={selectedElement}
+                    form={elementForm}
+                    onChange={setElementForm}
+                    types={elementTypes}
+                    crs={crs}
+                    canWrite={writable}
+                    saving={saveElement.isPending}
+                    onSave={() => saveElement.mutate()}
+                    onCancel={closeElement}
+                    onArchive={(a) => archiveElement.mutate(a)}
+                  />
+                ) : (
                 <AreaPanel
                   area={editing && !draft?.areaId ? null : selected}
                   isNew={editing && !draft?.areaId}
@@ -505,6 +653,7 @@ export function EditorPage() {
                   onInsertAfter={insertAfter}
                   onRemoveVertex={removeVertex}
                 />
+                )}
               </Tabs.Panel>
               <Tabs.Panel value="history">
                 {selected && (

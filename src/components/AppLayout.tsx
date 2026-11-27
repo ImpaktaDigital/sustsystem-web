@@ -24,7 +24,7 @@ const NAV: NavItem[] = [
   { to: '/clientes', label: 'Clientes', icon: <IconBuildingCommunity size={18} />, permissions: ['clients.read'] },
   { to: '/empreendimentos', label: 'Empreendimentos', icon: <IconBuildingFactory2 size={18} />, permissions: ['enterprises.read'] },
   { to: '/usuarios', label: 'Equipe e usuários', icon: <IconUsers size={18} />, permissions: ['users.read'] },
-  { to: '/configuracoes/tipos-de-area', label: 'Tipos de área', icon: <IconPolygon size={18} />, permissions: ['area_types.manage'] },
+  { to: '/configuracoes/tipos-de-area', label: 'Tipos de área e símbolos', icon: <IconPolygon size={18} />, permissions: ['area_types.manage'] },
 ];
 
 const PLATFORM_NAV: NavItem[] = [

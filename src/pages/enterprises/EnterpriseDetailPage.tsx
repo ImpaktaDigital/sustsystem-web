@@ -3,7 +3,7 @@ import { modals } from '@mantine/modals';
 import { IconEdit } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { ENTERPRISE_TYPE_LABELS, type Enterprise, type Member, type Paginated } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
@@ -15,6 +15,7 @@ import { formatArea, formatCar, formatDateTime, maskCnae } from '../../lib/masks
 import { formatDocument } from '../../lib/shared';
 import { NotFoundPage } from '../NotFoundPage';
 import { AreasCard } from './AreasCard';
+import { PlantsPanel } from '../plants/PlantsPanel';
 
 /** Equipe atribuída ao empreendimento (define o acesso de técnicos de campo). */
 function TeamPanel({ enterprise }: { enterprise: Enterprise }) {
@@ -72,6 +73,7 @@ function TeamPanel({ enterprise }: { enterprise: Enterprise }) {
 
 export function EnterpriseDetailPage() {
   const { id = '' } = useParams();
+  const [params, setParams] = useSearchParams();
   const { can } = useAuth();
   const queryClient = useQueryClient();
   const { data: e, isLoading, error } = useQuery({ queryKey: ['enterprise', id], queryFn: () => api.get<Enterprise>(`/enterprises/${id}`) });
@@ -88,6 +90,7 @@ export function EnterpriseDetailPage() {
   });
 
   if (isLoading) return <LoadingBlock />;
+  const tab = params.get('aba') ?? 'dados';
   if (error || !e) return <NotFoundPage />;
   const land = [e.carNumber, e.propertyRegistration, e.registryOffice, e.ccirNumber, e.nirfNumber, e.sigefCode, e.municipalPropertyRegistration].some(Boolean);
 
@@ -121,9 +124,10 @@ export function EnterpriseDetailPage() {
         }
       />
 
-      <Tabs defaultValue="dados" keepMounted={false}>
+      <Tabs value={tab} onChange={(v) => setParams(v && v !== 'dados' ? { aba: v } : {}, { replace: true })} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="dados">Dados</Tabs.Tab>
+          <Tabs.Tab value="plantas">Plantas</Tabs.Tab>
           <Tabs.Tab value="equipe">Equipe ({e.assignments?.length ?? 0})</Tabs.Tab>
           {can('audit.read') && <Tabs.Tab value="historico">Histórico</Tabs.Tab>}
         </Tabs.List>
@@ -190,6 +194,7 @@ export function EnterpriseDetailPage() {
           </Grid>
         </Tabs.Panel>
 
+        <Tabs.Panel value="plantas"><PlantsPanel enterpriseId={e.id} /></Tabs.Panel>
         <Tabs.Panel value="equipe"><TeamPanel enterprise={e} /></Tabs.Panel>
 
         {can('audit.read') && (

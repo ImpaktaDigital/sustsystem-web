@@ -22,6 +22,11 @@ const ACTION_LABELS: Record<string, string> = {
   area_archive: 'Área arquivada',
   area_restore: 'Área restaurada',
   areas_export: 'Áreas exportadas',
+  element_create: 'Elemento pontual cadastrado',
+  element_update: 'Elemento pontual alterado',
+  element_archive: 'Elemento pontual arquivado',
+  element_restore: 'Elemento pontual restaurado',
+  plant_issue: 'Planta emitida',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -39,6 +44,7 @@ function describe(log: AuditLog) {
     return fields.length ? `Campos: ${fields.join(', ')}` : null;
   }
   if (log.action === 'areas_export') return `${String(d.format).toUpperCase()} — versões ${d.source === 'validated' ? 'validadas' : 'atuais'} (${d.count} área(s))`;
+  if (log.action === 'plant_issue') return `${String(d.name)} R${String(d.revision).padStart(2, '0')} — ${d.sheet}, 1:${Number(d.scale).toLocaleString('pt-BR')} · RT ${d.responsible}`;
   if (typeof d.areaId === 'string') {
     const ha = typeof d.areaM2 === 'number' ? ` · ${(d.areaM2 / 10_000).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ha` : '';
     return `${String(d.name)}${typeof d.version === 'number' ? ` — V${d.version}` : ''}${ha}`;

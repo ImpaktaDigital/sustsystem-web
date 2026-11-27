@@ -1,4 +1,5 @@
-import { ActionIcon, Button, Card, ColorInput, Group, Menu, Modal, NumberInput, Stack, Table, Text, Textarea, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Card, ColorInput, Group, Menu, Modal, NumberInput, Stack, Table, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { ElementTypesSection } from './ElementTypesSection';
 import { IconDots, IconPencil, IconPlus, IconToggleLeft, IconToggleRight } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -72,10 +73,19 @@ export function AreaTypesPage() {
   return (
     <>
       <PageHeader
-        title="Tipos de área"
-        description="Categorias usadas para delimitar áreas no editor geográfico (camadas, cores e legenda da planta)"
-        actions={<Button leftSection={<IconPlus size={16} />} onClick={() => { setEditing(null); setOpen(true); }}>Novo tipo</Button>}
+        title="Tipos de área e símbolos"
+        description="Categorias do editor geográfico: tipos de área (camadas e cores) e tipos de elemento pontual (símbolos). Ambos aparecem na legenda da planta."
       />
+      <Tabs defaultValue="areas" keepMounted={false}>
+        <Tabs.List mb="md">
+          <Tabs.Tab value="areas">Tipos de área</Tabs.Tab>
+          <Tabs.Tab value="elements">Elementos pontuais</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="elements"><ElementTypesSection /></Tabs.Panel>
+        <Tabs.Panel value="areas">
+      <Group justify="flex-end" mb="sm">
+        <Button leftSection={<IconPlus size={16} />} onClick={() => { setEditing(null); setOpen(true); }}>Novo tipo</Button>
+      </Group>
       <Card withBorder padding={0}>
         {isLoading ? <LoadingBlock /> : (
           <Table.ScrollContainer minWidth={640}>
@@ -113,6 +123,8 @@ export function AreaTypesPage() {
           </Table.ScrollContainer>
         )}
       </Card>
+        </Tabs.Panel>
+      </Tabs>
       <TypeModal type={editing} opened={open} onClose={() => setOpen(false)} />
     </>
   );
