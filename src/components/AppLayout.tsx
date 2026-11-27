@@ -1,8 +1,10 @@
-import { AppShell, Avatar, Burger, Group, Menu, NavLink, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core';
+import { AppShell, Avatar, Badge, Burger, Group, Menu, NavLink, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/client';
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconBuildingCommunity, IconBuildingFactory2, IconChevronDown, IconLayoutDashboard, IconLogout, IconSwitchHorizontal,
-  IconUserCircle, IconPolygon, IconUsers, IconUsersGroup,
+  IconDeviceMobile, IconUserCircle, IconPolygon, IconUsers, IconUsersGroup,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -23,6 +25,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Painel', icon: <IconLayoutDashboard size={18} /> },
   { to: '/clientes', label: 'Clientes', icon: <IconBuildingCommunity size={18} />, permissions: ['clients.read'] },
   { to: '/empreendimentos', label: 'Empreendimentos', icon: <IconBuildingFactory2 size={18} />, permissions: ['enterprises.read'] },
+  { to: '/levantamentos', label: 'Levantamentos', icon: <IconDeviceMobile size={18} />, permissions: ['surveys.review'] },
   { to: '/usuarios', label: 'Equipe e usuários', icon: <IconUsers size={18} />, permissions: ['users.read'] },
   { to: '/configuracoes/tipos-de-area', label: 'Tipos de área e símbolos', icon: <IconPolygon size={18} />, permissions: ['area_types.manage'] },
 ];
@@ -38,6 +41,13 @@ export function AppLayout() {
   const { me, can, logout, switchOrganization } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  // Levantamentos aguardando triagem (atualiza a cada minuto)
+  const pendingSurveys = useQuery({
+    queryKey: ['surveys-pending'],
+    queryFn: () => api.get<{ pending: number }>('/surveys/pending-count'),
+    enabled: !!me && can('surveys.review'),
+    refetchInterval: 60_000,
+  });
   if (!me) return null;
 
   const isActive = (to: string) => (to === '/' ? location.pathname === '/' : location.pathname.startsWith(to));
@@ -48,6 +58,7 @@ export function AppLayout() {
       to={item.to}
       label={item.label}
       leftSection={item.icon}
+      rightSection={item.to === '/levantamentos' && pendingSurveys.data?.pending ? <Badge size="sm" circle color="orange">{pendingSurveys.data.pending}</Badge> : undefined}
       active={isActive(item.to)}
       onClick={close}
       variant="light"

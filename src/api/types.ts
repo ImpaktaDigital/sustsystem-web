@@ -328,3 +328,89 @@ export interface PlantRecord extends PlantSummary {
     elements: PlantSnapshotElement[];
   };
 }
+
+// ───────────── Levantamentos de campo (Parte 5) ─────────────
+
+export type SurveyStatus = 'RECEIVED' | 'APPROVED' | 'REJECTED';
+
+export const SURVEY_STATUS_LABELS: Record<SurveyStatus, string> = {
+  RECEIVED: 'Em triagem',
+  APPROVED: 'Aprovado',
+  REJECTED: 'Rejeitado',
+};
+
+export interface PreRegistration {
+  clientType?: PersonType;
+  clientName?: string;
+  clientDocument?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  enterpriseName?: string;
+  enterpriseType?: string;
+  street?: string;
+  number?: string;
+  district?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  projectHint?: string;
+  clientId?: string;
+}
+
+export interface SurveySummary {
+  id: string;
+  title: string;
+  status: SurveyStatus;
+  preRegistration: PreRegistration | null;
+  startedAt: string;
+  receivedAt: string;
+  reviewedAt: string | null;
+  centroidLat: number | null;
+  centroidLng: number | null;
+  enterprise: { id: string; name: string } | null;
+  collectedBy: { id: string; name: string } | null;
+  _count: { features: number; photos: number };
+}
+
+export interface SurveyFeature {
+  id: string;
+  kind: 'AREA' | 'ELEMENT';
+  name: string;
+  suggestedTypeId: string | null;
+  method: AreaSourceMethod;
+  geometry: { type: 'Polygon'; coordinates: number[][][] } | { type: 'Point'; coordinates: number[] };
+  vertexAccuracies: Array<number | null> | null;
+  specification: string | null;
+  notes: string | null;
+  status: 'PENDING' | 'APPROVED' | 'DISCARDED';
+  resultAreaId: string | null;
+  resultElementId: string | null;
+  areaM2: number | null;
+  perimeterM: number | null;
+}
+
+export interface SurveyPhoto {
+  id: string;
+  featureId: string | null;
+  contentType: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyM: number | null;
+  heading: number | null;
+  takenAt: string;
+  caption: string | null;
+  uploadedAt: string | null;
+  url: string | null;
+}
+
+export interface SurveyDetail extends Omit<SurveySummary, '_count' | 'enterprise'> {
+  notes: string | null;
+  finishedAt: string | null;
+  deviceInfo: Record<string, unknown> | null;
+  reviewNotes: string | null;
+  enterprise: { id: string; name: string; clientId: string; status: RecordStatus } | null;
+  reviewedBy: { id: string; name: string } | null;
+  features: SurveyFeature[];
+  photos: SurveyPhoto[];
+}

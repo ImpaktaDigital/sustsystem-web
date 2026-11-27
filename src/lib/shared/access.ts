@@ -39,6 +39,10 @@ export const PERMISSIONS = [
   'area_types.manage',
   /** Emitir revisões de planta (PDF) com responsável técnico. */
   'plants.issue',
+  /** Fazer levantamentos no app de campo (inclusive com pré-cadastro, antes de existir o empreendimento). */
+  'surveys.collect',
+  /** Triar, vincular e aprovar levantamentos recebidos do app. */
+  'surveys.review',
   'audit.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -48,10 +52,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   MANAGER: [
     'users.read', 'clients.read', 'clients.write',
     'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'enterprises.assign',
-    'areas.write', 'area_types.manage', 'plants.issue', 'audit.read',
+    'areas.write', 'area_types.manage', 'plants.issue', 'surveys.collect', 'surveys.review', 'audit.read',
   ],
-  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'areas.write', 'areas.validate', 'plants.issue'],
-  FIELD_TECH: ['enterprises.read', 'areas.write'],
+  ENGINEER: ['users.read', 'clients.read', 'enterprises.read', 'enterprises.read_all', 'enterprises.write', 'areas.write', 'areas.validate', 'plants.issue',
+    'surveys.collect', 'surveys.review'],
+  FIELD_TECH: ['enterprises.read', 'areas.write', 'surveys.collect'],
   CLIENT: [],
 };
 
