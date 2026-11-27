@@ -20,12 +20,14 @@ interface Props {
   onPick?: (lngLat: { longitude: number; latitude: number }) => void;
   initialBasemap?: string;
   onPointClick?: (point: MapPoint) => void;
+  /** Centraliza o mapa num ponto/zoom sempre que `key` mudar (ex.: ponto obtido pelo endereço). */
+  focus?: { longitude: number; latitude: number; zoom: number; key: number } | null;
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** Mapa MapLibre com alternância Mapa/Satélite, marcadores e seleção de ponto por clique. */
-export function MapView({ height = 400, points = [], selected, onPick, initialBasemap = 'streets', onPointClick }: Props) {
+export function MapView({ height = 400, points = [], selected, onPick, initialBasemap = 'streets', onPointClick, focus }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const markers = useRef<Marker[]>([]);
@@ -121,6 +123,13 @@ export function MapView({ height = 400, points = [], selected, onPick, initialBa
       selectedMarker.current.setLngLat([selected.longitude, selected.latitude]);
     }
   }, [selected?.latitude, selected?.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Centralização solicitada pelo formulário
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !focus) return;
+    m.flyTo({ center: [focus.longitude, focus.latitude], zoom: focus.zoom, duration: 1200 });
+  }, [focus?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="map-container" style={{ height }}>

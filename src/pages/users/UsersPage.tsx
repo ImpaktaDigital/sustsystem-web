@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ActionIcon, Alert, Button, Card, Group, Menu, Modal, Pagination, PasswordInput, Select, Stack, Table, Text, TextInput } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
-import { IconDots, IconMailForward, IconPencil, IconPlus, IconSearch, IconUserOff, IconUserCheck } from '@tabler/icons-react';
+import { IconDots, IconMailForward, IconPencil, IconPlus, IconSearch, IconTrash, IconUserOff, IconUserCheck } from '@tabler/icons-react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -132,6 +132,29 @@ export function UsersPage() {
       onConfirm: () => action.mutate({ member, op: 'deactivate' }),
     });
 
+  const remove = useMutation({
+    mutationFn: (member: Member) => api.delete(`/users/${member.id}`),
+    onSuccess: (_r, member) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      notifySuccess(`${member.name} foi excluído(a) da organização`);
+    },
+    onError: (e) => notifyError(e),
+  });
+
+  const confirmDelete = (member: Member) =>
+    modals.openConfirmModal({
+      title: 'Excluir usuário',
+      children: (
+        <Stack gap="xs">
+          <Text fz="sm"><b>{member.name}</b> ({member.email}) será removido(a) da organização de forma definitiva.</Text>
+          <Text fz="sm" c="dimmed">A exclusão só é permitida porque este usuário ainda não fez nenhum registro. Atribuições a empreendimentos também serão removidas.</Text>
+        </Stack>
+      ),
+      labels: { confirm: 'Excluir', cancel: 'Cancelar' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => remove.mutate(member),
+    });
+
   return (
     <>
       <PageHeader
@@ -180,6 +203,14 @@ export function UsersPage() {
                               <Menu.Item color="red" leftSection={<IconUserOff size={14} />} onClick={() => confirmDeactivate(m)}>Desativar acesso</Menu.Item>
                             ) : (
                               <Menu.Item leftSection={<IconUserCheck size={14} />} onClick={() => action.mutate({ member: m, op: 'activate' })}>Reativar acesso</Menu.Item>
+                            ))}
+                            {m.id !== me?.user.id && (m.canDelete ? (
+                              <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={() => confirmDelete(m)}>Excluir usuário</Menu.Item>
+                            ) : (
+                              <Menu.Item disabled leftSection={<IconTrash size={14} />}>
+                                Excluir usuário
+                                <Text fz="xs" c="dimmed">Possui {m.activityCount} registro(s): apenas inativar</Text>
+                              </Menu.Item>
                             ))}
                           </Menu.Dropdown>
                         </Menu>

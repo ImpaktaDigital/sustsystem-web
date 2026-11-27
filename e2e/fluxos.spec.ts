@@ -64,8 +64,16 @@ test('gestor cadastra cliente, contato e empreendimento', async ({ page }) => {
   const cnpj = makeCnpj();
   await page.getByLabel('CNPJ').fill(cnpj);
   await page.getByLabel('Nome fantasia').fill(`Cerâmica ${unique}`);
-  await page.getByLabel('CNAE principal').fill('2342702');
-  await expect(page.getByLabel('CNAE principal')).toHaveValue('2342-7/02');
+  // Atividades: CNAE com descrição do IBGE e marcação da principal
+  await page.getByRole('button', { name: 'Adicionar atividade' }).click();
+  await page.getByRole('textbox', { name: 'CNAE' }).nth(0).fill('2342702');
+  await expect(page.getByRole('textbox', { name: 'CNAE' }).nth(0)).toHaveValue('2342-7/02');
+  await expect(page.getByRole('textbox', { name: 'Descrição (IBGE)' }).nth(0)).toHaveValue(/cerâmica/i);
+  await page.getByRole('button', { name: 'Adicionar atividade' }).click();
+  await page.getByRole('textbox', { name: 'CNAE' }).nth(1).fill('3811400');
+  await expect(page.getByRole('textbox', { name: 'Descrição (IBGE)' }).nth(1)).toHaveValue(/coleta de resíduos/i);
+  await expect(page.getByRole('checkbox', { name: 'Principal' }).nth(0)).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Principal' }).nth(1)).not.toBeChecked();
   await page.getByLabel('Telefone').fill('19987654321');
   await page.getByLabel('Município').fill('Campinas');
   await pickOption(page, 'UF', 'SP');
@@ -74,6 +82,7 @@ test('gestor cadastra cliente, contato e empreendimento', async ({ page }) => {
 
   await expect(page.getByText('Cliente cadastrado')).toBeVisible();
   await expect(page.getByRole('heading', { name: new RegExp(`Cerâmica Teste ${unique}`) })).toBeVisible();
+  await expect(page.getByText(/Coleta de resíduos não perigosos/i)).toBeVisible();
 
   // Contato
   await page.getByRole('tab', { name: /Contatos/ }).click();
@@ -93,14 +102,24 @@ test('gestor cadastra cliente, contato e empreendimento', async ({ page }) => {
   await expect(page.getByRole('textbox', { name: 'Cliente' })).toHaveValue(new RegExp(`Cerâmica ${unique}`));
   await page.getByLabel('Nome do empreendimento').fill(`Planta Campinas ${unique}`);
   await pickOption(page, 'Tipo', 'Fábrica / planta industrial');
+  // Endereço posiciona o ponto no mapa automaticamente
+  await page.getByLabel('Logradouro').fill('Avenida Francisco Glicério');
+  await page.getByLabel('Número').fill('1000');
+  await page.getByLabel('Município').fill('Campinas');
+  await pickOption(page, 'UF', 'SP');
+  await expect(page.getByText(/Ponto posicionado pelo endereço/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByLabel('Latitude')).toHaveValue(/^-22\.[89]/);
+  await expect(page.getByText(/UTM zone 23S \(EPSG:31983\)/)).toBeVisible();
+  // Ajuste manual: coordenadas digitadas e clique no mapa
   await page.getByLabel('Latitude').fill('-22.9056');
   await page.getByLabel('Longitude').fill('-47.0608');
-  await expect(page.getByText(/UTM zone 23S \(EPSG:31983\)/)).toBeVisible();
-  // Clique no mapa ajusta o ponto
   await page.locator('.map-container canvas').first().click({ position: { x: 400, y: 150 } });
-  await page.getByRole('button', { name: 'Adicionar atividade' }).click();
-  await page.getByRole('textbox', { name: 'CNAE' }).fill('2342702');
-  await page.getByRole('textbox', { name: 'Descrição da atividade' }).fill('Fabricação de artefatos cerâmicos');
+  await expect(page.getByText(/Ponto ajustado manualmente/)).toBeVisible();
+  // Atividades copiadas do cliente, com descrição do IBGE
+  await page.getByRole('button', { name: 'Copiar CNAEs do cliente' }).click();
+  await expect(page.getByRole('textbox', { name: 'Descrição da atividade' })).toHaveCount(2);
+  await expect(page.getByRole('textbox', { name: 'Descrição da atividade' }).nth(0)).toHaveValue(/cerâmica/i);
+  await page.getByRole('textbox', { name: 'Descrição da atividade' }).nth(0).fill('Fabricação de artefatos cerâmicos');
   await page.waitForTimeout(1500);
   await shot(page, '06-empreendimento-form');
   await page.getByRole('button', { name: 'Cadastrar empreendimento' }).click();
@@ -134,6 +153,16 @@ test('administrador convida membro e vê histórico', async ({ page }) => {
   await expect(page.getByText(`Convite enviado para convidado${unique}@exemplo.com`)).toBeVisible();
   await expect(page.getByText(`Convidado ${unique}`)).toBeVisible();
   await shot(page, '09-usuarios');
+
+  // Membro com registros (gestor) só pode ser inativado; o recém-convidado pode ser excluído
+  await page.getByRole('button', { name: /Ações para Gustavo/ }).click();
+  await expect(page.getByText(/registro\(s\): apenas inativar/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: `Ações para Convidado ${unique}` }).click();
+  await page.getByRole('menu', { name: `Ações para Convidado ${unique}` }).getByRole('menuitem', { name: 'Excluir usuário', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Excluir' }).click();
+  await expect(page.getByText(`Convidado ${unique} foi excluído(a) da organização`)).toBeVisible();
+  await expect(page.getByRole('cell', { name: new RegExp(`convidado${unique}@`) })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Clientes' }).first().click();
   await page.getByRole('textbox', { name: 'Buscar clientes' }).fill(`Teste ${unique}`);

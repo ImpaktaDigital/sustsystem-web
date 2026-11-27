@@ -139,6 +139,9 @@ export interface Member {
   status: RecordStatus;
   lastLoginAt: string | null;
   memberSince: string;
+  /** Registros feitos pelo usuário na organização; com registros, só é possível inativar. */
+  activityCount: number;
+  canDelete: boolean;
 }
 
 export interface AuditLog {

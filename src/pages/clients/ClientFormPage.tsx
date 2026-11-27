@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, Card, Grid, Group, SegmentedControl, Stack, TagsInput, Text, Textarea, TextInput, Title } from '@mantine/core';
+import { Button, Card, Grid, Group, SegmentedControl, Stack, Text, Textarea, TextInput, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -7,6 +7,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { api } from '../../api/client';
 import type { Client } from '../../api/types';
+import { ActivitiesEditor } from '../../components/ActivitiesEditor';
 import { AddressFields } from '../../components/AddressFields';
 import { LoadingBlock, PageHeader } from '../../components/common';
 import { notifyError, notifySuccess } from '../../components/notify';
@@ -14,7 +15,19 @@ import { maskCnae, maskCpfCnpj, maskPhone } from '../../lib/masks';
 import { isValidDocument, onlyDigits } from '../../lib/shared';
 
 const optional = z.string().trim().optional().or(z.literal(''));
-const cnae = z.string().optional().refine((v) => !v || onlyDigits(v).length === 7, 'CNAE deve ter 7 dígitos');
+
+/** Atividades (CNAE) do cliente: no banco ficam só os códigos (principal + secundários). */
+export const activitiesSchema = z
+  .array(z.object({ cnae: z.string().refine((v) => onlyDigits(v).length === 7, 'CNAE deve ter 7 dígitos'), isMain: z.boolean() }))
+  .superRefine((list, ctx) => {
+    const seen = new Set<string>();
+    list.forEach((a, i) => {
+      const code = onlyDigits(a.cnae);
+      if (code.length === 7 && seen.has(code)) ctx.addIssue({ code: 'custom', path: [i, 'cnae'], message: 'CNAE repetido' });
+      seen.add(code);
+    });
+    if (list.length && list.filter((a) => a.isMain).length !== 1) ctx.addIssue({ code: 'custom', message: 'Marque qual é a atividade principal' });
+  });
 
 const schema = z
   .object({
@@ -24,8 +37,7 @@ const schema = z
     document: z.string().min(1, 'Informe o CPF/CNPJ'),
     stateRegistration: optional,
     municipalRegistration: optional,
-    mainCnae: cnae,
-    secondaryCnaes: z.array(z.string()).refine((list) => list.every((v) => onlyDigits(v).length === 7), 'Cada CNAE deve ter 7 dígitos'),
+    activities: activitiesSchema,
     email: z.string().trim().email('E-mail inválido').optional().or(z.literal('')),
     phone: optional,
     zipCode: optional,
@@ -42,22 +54,24 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 const empty: FormValues = {
-  type: 'PJ', name: '', tradeName: '', document: '', stateRegistration: '', municipalRegistration: '', mainCnae: '',
-  secondaryCnaes: [], email: '', phone: '', zipCode: '', street: '', number: '', complement: '', district: '', city: '', state: null, notes: '',
+  type: 'PJ', name: '', tradeName: '', document: '', stateRegistration: '', municipalRegistration: '',
+  activities: [], email: '', phone: '', zipCode: '', street: '', number: '', complement: '', district: '', city: '', state: null, notes: '',
 };
 
 /** Converte '' em undefined (criação) ou null (edição, para limpar o campo). */
 function toPayload(values: FormValues, editing: boolean) {
   const blank = editing ? null : undefined;
   const clean = (v?: string | null) => (v && v.trim() ? v.trim() : blank);
+  const activities = values.type === 'PJ' ? values.activities : [];
+  const main = activities.find((a) => a.isMain);
   return {
     ...(editing ? {} : { type: values.type, document: onlyDigits(values.document) }),
     name: values.name.trim(),
     tradeName: clean(values.tradeName),
     stateRegistration: clean(values.stateRegistration),
     municipalRegistration: clean(values.municipalRegistration),
-    mainCnae: values.mainCnae ? onlyDigits(values.mainCnae) : blank,
-    secondaryCnaes: values.secondaryCnaes.map(onlyDigits),
+    mainCnae: main ? onlyDigits(main.cnae) : blank,
+    secondaryCnaes: activities.filter((a) => !a.isMain).map((a) => onlyDigits(a.cnae)),
     email: clean(values.email),
     phone: clean(values.phone),
     zipCode: values.zipCode ? onlyDigits(values.zipCode) : blank,
@@ -87,7 +101,12 @@ export function ClientFormPage() {
     if (!c) return;
     reset({
       type: c.type, name: c.name, tradeName: c.tradeName ?? '', document: c.document, stateRegistration: c.stateRegistration ?? '',
-      municipalRegistration: c.municipalRegistration ?? '', mainCnae: c.mainCnae ?? '', secondaryCnaes: c.secondaryCnaes.map(maskCnae),
+      municipalRegistration: c.municipalRegistration ?? '',
+      activities: [
+        ...(c.mainCnae ? [{ cnae: maskCnae(c.mainCnae), isMain: true }] : []),
+        // Sem principal gravado, o primeiro secundário é sugerido como principal
+        ...c.secondaryCnaes.map((code, i) => ({ cnae: maskCnae(code), isMain: !c.mainCnae && i === 0 })),
+      ],
       email: c.email ?? '', phone: c.phone ?? '', zipCode: c.zipCode ?? '', street: c.street ?? '', number: c.number ?? '',
       complement: c.complement ?? '', district: c.district ?? '', city: c.city ?? '', state: c.state, notes: c.notes ?? '',
     });
@@ -167,34 +186,20 @@ export function ClientFormPage() {
                   <Grid.Col span={{ base: 6, sm: 3 }}>
                     <TextInput label="Inscrição municipal" {...register('municipalRegistration')} />
                   </Grid.Col>
-                  <Grid.Col span={{ base: 12, sm: 4 }}>
-                    <Controller
-                      control={control}
-                      name="mainCnae"
-                      render={({ field }) => (
-                        <TextInput label="CNAE principal" placeholder="0000-0/00" {...field} value={maskCnae(field.value ?? '')} error={formState.errors.mainCnae?.message} />
-                      )}
-                    />
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 12, sm: 8 }}>
-                    <Controller
-                      control={control}
-                      name="secondaryCnaes"
-                      render={({ field }) => (
-                        <TagsInput
-                          label="CNAEs secundários"
-                          description="Digite o código e pressione Enter"
-                          {...field}
-                          onChange={(values) => field.onChange(values.map(maskCnae))}
-                          error={formState.errors.secondaryCnaes?.message}
-                        />
-                      )}
-                    />
-                  </Grid.Col>
                 </>
               )}
             </Grid>
           </Card>
+
+          {pj && (
+            <ActivitiesEditor
+              mode="client"
+              control={control}
+              setValue={setValue}
+              errors={formState.errors.activities}
+              description="Informe os CNAEs do cartão CNPJ e marque o principal. A descrição é consultada na tabela oficial do IBGE."
+            />
+          )}
 
           <Card withBorder padding="lg">
             <Title order={4} mb="md">Contato e endereço</Title>

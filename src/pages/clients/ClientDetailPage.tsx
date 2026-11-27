@@ -11,7 +11,8 @@ import { formatAddress } from '../../components/AddressFields';
 import { AuditTimeline } from '../../components/AuditTimeline';
 import { EmptyState, Field, LoadingBlock, PageHeader, StatusBadge } from '../../components/common';
 import { notifyError, notifySuccess } from '../../components/notify';
-import { formatDateTime, maskCnae, maskPhone } from '../../lib/masks';
+import { CnaeText } from '../../components/CnaeField';
+import { formatDateTime, maskPhone } from '../../lib/masks';
 import { formatDocument } from '../../lib/shared';
 import { NotFoundPage } from '../NotFoundPage';
 import { ContactModal } from './ContactModal';
@@ -102,13 +103,24 @@ export function ClientDetailPage() {
               <Field label="Tipo">{client.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</Field>
               <Field label="Inscrição estadual">{client.stateRegistration}</Field>
               <Field label="Inscrição municipal">{client.municipalRegistration}</Field>
-              <Field label="CNAE principal">{client.mainCnae && maskCnae(client.mainCnae)}</Field>
-              <Field label="CNAEs secundários">{client.secondaryCnaes.map(maskCnae).join(', ')}</Field>
               <Field label="E-mail">{client.email}</Field>
               <Field label="Telefone">{client.phone && maskPhone(client.phone)}</Field>
               <Field label="Endereço">{formatAddress(client)}</Field>
               <Field label="Cadastrado em">{formatDateTime(client.createdAt)}</Field>
             </SimpleGrid>
+            {client.type === 'PJ' && (
+              <Stack gap={6} mt="lg">
+                <Text fz="xs" c="dimmed" tt="uppercase" fw={600}>Atividades exercidas (CNAE)</Text>
+                {!client.mainCnae && !client.secondaryCnaes.length ? <Text fz="sm">—</Text> : (
+                  [...(client.mainCnae ? [client.mainCnae] : []), ...client.secondaryCnaes].map((code) => (
+                    <Group key={code} gap="xs" wrap="nowrap" align="flex-start">
+                      <CnaeText code={code} />
+                      {code === client.mainCnae && <Badge size="xs">Principal</Badge>}
+                    </Group>
+                  ))
+                )}
+              </Stack>
+            )}
             {client.notes && (
               <Stack gap={4} mt="lg">
                 <Text fz="xs" c="dimmed" tt="uppercase" fw={600}>Observações</Text>

@@ -1,21 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  ActionIcon, Alert, Button, Card, Checkbox, Grid, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title, Tooltip,
-} from '@mantine/core';
+import { Alert, Button, Card, Grid, Group, Loader, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconCurrentLocation, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconCurrentLocation, IconMapPinSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { api } from '../../api/client';
 import { ENTERPRISE_TYPE_LABELS, type Client, type Enterprise, type EnterpriseType, type Member, type Paginated } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
+import { ActivitiesEditor } from '../../components/ActivitiesEditor';
 import { AddressFields } from '../../components/AddressFields';
 import { LoadingBlock, PageHeader } from '../../components/common';
 import { notifyError, notifySuccess } from '../../components/notify';
 import { formatCar, maskCnae } from '../../lib/masks';
+import { addressKey, canGeocode, geocodeAddress, PRECISION_LABELS, PRECISION_ZOOM, type GeocodePrecision } from '../../lib/geocode';
 import { formatDocument, onlyDigits, utmZoneFor } from '../../lib/shared';
 import { MapView } from '../../map/MapView';
 
@@ -45,7 +45,7 @@ const schema = z
     notes: optional,
     activities: z.array(
       z.object({
-        cnae: z.string().optional().refine((v) => !v || onlyDigits(v).length === 7, 'CNAE com 7 dígitos'),
+        cnae: z.string().refine((v) => !v || onlyDigits(v).length === 7, 'CNAE com 7 dígitos'),
         description: z.string().trim().min(2, 'Descreva a atividade'),
         isMain: z.boolean(),
       }),
@@ -89,6 +89,38 @@ function toPayload(v: FormValues, editing: boolean) {
     notes: clean(v.notes),
     activities: v.activities.map((a) => ({ cnae: a.cnae ? onlyDigits(a.cnae) : undefined, description: a.description.trim(), isMain: a.isMain })),
   };
+}
+
+/** Situação do ponto no mapa (origem e precisão), exibida acima do mapa. */
+function LocationHint({ source, geo, hasPoint }: {
+  source: 'none' | 'address' | 'manual';
+  geo: { status: 'idle' | 'loading' | 'found' | 'not_found' | 'error'; precision?: GeocodePrecision };
+  hasPoint: boolean;
+}) {
+  if (geo.status === 'loading') {
+    return <Group gap={6} mb="sm"><Loader size={14} /><Text fz="sm" c="dimmed">Localizando o endereço no mapa…</Text></Group>;
+  }
+  if (geo.status === 'not_found') {
+    return <Alert variant="light" color="yellow" mb="sm" p="xs">Endereço não encontrado no mapa. Clique no mapa ou arraste o marcador para definir o ponto.</Alert>;
+  }
+  if (geo.status === 'error') {
+    return <Alert variant="light" color="yellow" mb="sm" p="xs">Não foi possível consultar o serviço de mapas agora. Defina o ponto clicando no mapa.</Alert>;
+  }
+  if (source === 'address' && geo.precision) {
+    return (
+      <Alert variant="light" color={geo.precision === 'city' ? 'yellow' : 'slateBlue'} mb="sm" p="xs">
+        Ponto posicionado pelo endereço (precisão: {PRECISION_LABELS[geo.precision]}).
+        {geo.precision === 'city' ? ' Localização aproximada — ' : ' '}Confira e, se necessário, ajuste clicando no mapa ou arrastando o marcador.
+      </Alert>
+    );
+  }
+  return (
+    <Text fz="sm" c="dimmed" mb="sm">
+      {source === 'manual' && hasPoint
+        ? 'Ponto ajustado manualmente; ele não muda ao editar o endereço. Use "Posicionar pelo endereço" para reposicionar.'
+        : 'Preencha o endereço, use sua localização ou clique no mapa. O marcador pode ser arrastado para ajustar o ponto.'}
+    </Text>
+  );
 }
 
 /** Seleção de cliente com busca no servidor. */
@@ -150,8 +182,26 @@ export function EnterpriseFormPage() {
     resolver: zodResolver(schema),
     defaultValues: { ...empty, clientId: params.get('clientId') ?? '' },
   });
-  const activities = useFieldArray({ control, name: 'activities' });
-  const [lat, lng, type] = watch(['latitude', 'longitude', 'type']);
+  const [lat, lng, type, clientId] = watch(['latitude', 'longitude', 'type', 'clientId']);
+  const [zipCode, street, number, district, city, state] = watch(['zipCode', 'street', 'number', 'district', 'city', 'state']);
+  const address = useMemo(() => ({ zipCode, street, number, district, city, state }), [zipCode, street, number, district, city, state]);
+  const [debouncedAddress] = useDebouncedValue(address, 1200);
+
+  /**
+   * Origem do ponto: 'address' (posicionado pelo endereço, acompanha as alterações do endereço) ou
+   * 'manual' (clique/arraste no mapa, GPS ou coordenadas digitadas — não é mais sobrescrito automaticamente).
+   */
+  const [source, setSource] = useState<'none' | 'address' | 'manual'>('none');
+  const [geo, setGeo] = useState<{ status: 'idle' | 'loading' | 'found' | 'not_found' | 'error'; precision?: GeocodePrecision }>({ status: 'idle' });
+  const [focus, setFocus] = useState<{ latitude: number; longitude: number; zoom: number; key: number } | null>(null);
+  const lastGeocoded = useRef<string | null>(null);
+  const geocodeRun = useRef(0);
+
+  const selectedClient = useQuery({
+    queryKey: ['client', clientId],
+    queryFn: () => api.get<Client>(`/clients/${clientId}`),
+    enabled: !!clientId,
+  });
 
   useEffect(() => {
     const e = existing.data;
@@ -165,6 +215,9 @@ export function EnterpriseFormPage() {
       city: e.city ?? '', state: e.state, notes: e.notes ?? '',
       activities: (e.activities ?? []).map((a) => ({ cnae: a.cnae ? maskCnae(a.cnae) : '', description: a.description, isMain: a.isMain })),
     });
+    // Ponto já gravado é tratado como definido manualmente; o endereço carregado não dispara nova busca.
+    if (e.latitude != null) setSource('manual');
+    lastGeocoded.current = addressKey(e);
   }, [existing.data, reset]);
 
   const save = useMutation({
@@ -180,9 +233,54 @@ export function EnterpriseFormPage() {
     onError: (err) => notifyError(err),
   });
 
-  const setPoint = ({ latitude, longitude }: { latitude: number; longitude: number }) => {
+  const setPoint = ({ latitude, longitude }: { latitude: number; longitude: number }, from: 'address' | 'manual' = 'manual') => {
     setValue('latitude', round7(latitude), { shouldDirty: true, shouldValidate: true });
     setValue('longitude', round7(longitude), { shouldDirty: true, shouldValidate: true });
+    setSource(from);
+    if (from === 'manual') setGeo({ status: 'idle' });
+  };
+
+  /** Localiza o endereço no mapa. `force` ignora ajuste manual anterior (botão "Posicionar pelo endereço"). */
+  const locateAddress = async (force = false) => {
+    if (!canGeocode(address)) return;
+    const run = ++geocodeRun.current;
+    lastGeocoded.current = addressKey(address);
+    setGeo({ status: 'loading' });
+    try {
+      const result = await geocodeAddress(address);
+      if (run !== geocodeRun.current) return; // endereço mudou durante a busca
+      if (!result) return setGeo({ status: 'not_found' });
+      if (!force && source === 'manual') return setGeo({ status: 'idle' });
+      setPoint(result, 'address');
+      setGeo({ status: 'found', precision: result.precision });
+      setFocus({ latitude: result.latitude, longitude: result.longitude, zoom: PRECISION_ZOOM[result.precision], key: run });
+    } catch {
+      if (run === geocodeRun.current) setGeo({ status: 'error' });
+    }
+  };
+
+  // Endereço alterado → atualiza o ponto, a menos que ele tenha sido ajustado manualmente
+  useEffect(() => {
+    if (source === 'manual' || !canGeocode(debouncedAddress)) return;
+    if (addressKey(debouncedAddress) === lastGeocoded.current) return;
+    void locateAddress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedAddress, source]);
+
+  /** Copia os CNAEs do cliente que ainda não estão na lista (a descrição vem do IBGE). */
+  const copyClientActivities = () => {
+    const c = selectedClient.data;
+    if (!c) return;
+    const current = watch('activities');
+    const existingCodes = new Set(current.map((a) => onlyDigits(a.cnae)));
+    const codes = [...(c.mainCnae ? [c.mainCnae] : []), ...c.secondaryCnaes].filter((code) => !existingCodes.has(code));
+    if (!codes.length) return notifySuccess('As atividades do cliente já estão na lista');
+    const hasMain = current.some((a) => a.isMain);
+    setValue('activities', [
+      ...current,
+      ...codes.map((code) => ({ cnae: maskCnae(code), description: '', isMain: !hasMain && code === c.mainCnae })),
+    ], { shouldDirty: true });
+    notifySuccess(`${codes.length} atividade(s) copiada(s) do cliente`);
   };
 
   const useMyLocation = () => {
@@ -296,17 +394,36 @@ export function EnterpriseFormPage() {
           </Card>
 
           <Card withBorder padding="lg">
+            <Title order={4} mb={4}>Endereço</Title>
+            <Text fz="sm" c="dimmed" mb="md">Ao preencher o endereço, o ponto é posicionado automaticamente no mapa abaixo.</Text>
+            <AddressFields control={control} setValue={setValue} />
+          </Card>
+
+          <Card withBorder padding="lg">
             <Group justify="space-between" mb="xs">
               <Title order={4}>Localização</Title>
-              <Button variant="light" size="xs" leftSection={<IconCurrentLocation size={14} />} loading={locating} onClick={useMyLocation}>
-                Usar minha localização
-              </Button>
+              <Group gap="xs">
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  leftSection={<IconMapPinSearch size={14} />}
+                  disabled={!canGeocode(address)}
+                  loading={geo.status === 'loading'}
+                  onClick={() => void locateAddress(true)}
+                >
+                  Posicionar pelo endereço
+                </Button>
+                <Button variant="light" size="xs" leftSection={<IconCurrentLocation size={14} />} loading={locating} onClick={useMyLocation}>
+                  Usar minha localização
+                </Button>
+              </Group>
             </Group>
-            <Text fz="sm" c="dimmed" mb="sm">Clique no mapa ou arraste o marcador para definir o ponto de referência do empreendimento.</Text>
+            <LocationHint source={source} geo={geo} hasPoint={lat != null && lng != null} />
             <MapView
               height={360}
               selected={lat != null && lng != null ? { latitude: lat, longitude: lng } : null}
-              onPick={setPoint}
+              onPick={(p) => setPoint(p, 'manual')}
+              focus={focus}
               initialBasemap="satellite"
             />
             <Grid mt="sm">
@@ -315,7 +432,7 @@ export function EnterpriseFormPage() {
                   control={control}
                   name="latitude"
                   render={({ field }) => (
-                    <NumberInput label="Latitude" decimalScale={7} min={-90} max={90} {...field} value={field.value ?? ''} onChange={(v) => field.onChange(v === '' ? null : Number(v))} error={formState.errors.latitude?.message} />
+                    <NumberInput label="Latitude" decimalScale={7} min={-90} max={90} {...field} value={field.value ?? ''} onChange={(v) => { field.onChange(v === '' ? null : Number(v)); setSource('manual'); }} error={formState.errors.latitude?.message} />
                   )}
                 />
               </Grid.Col>
@@ -324,7 +441,7 @@ export function EnterpriseFormPage() {
                   control={control}
                   name="longitude"
                   render={({ field }) => (
-                    <NumberInput label="Longitude" decimalScale={7} min={-180} max={180} {...field} value={field.value ?? ''} onChange={(v) => field.onChange(v === '' ? null : Number(v))} error={formState.errors.longitude?.message} />
+                    <NumberInput label="Longitude" decimalScale={7} min={-180} max={180} {...field} value={field.value ?? ''} onChange={(v) => { field.onChange(v === '' ? null : Number(v)); setSource('manual'); }} error={formState.errors.longitude?.message} />
                   )}
                 />
               </Grid.Col>
@@ -335,11 +452,6 @@ export function EnterpriseFormPage() {
                 </Text>
               </Grid.Col>
             </Grid>
-          </Card>
-
-          <Card withBorder padding="lg">
-            <Title order={4} mb="md">Endereço</Title>
-            <AddressFields control={control} setValue={setValue} />
           </Card>
 
           <Card withBorder padding="lg">
@@ -359,56 +471,15 @@ export function EnterpriseFormPage() {
             </Grid>
           </Card>
 
-          <Card withBorder padding="lg">
-            <Group justify="space-between" mb="md">
-              <Title order={4}>Atividades exercidas</Title>
-              <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => activities.append({ cnae: '', description: '', isMain: activities.fields.length === 0 })}>
-                Adicionar atividade
-              </Button>
-            </Group>
-            {!activities.fields.length && <Text fz="sm" c="dimmed">Nenhuma atividade informada.</Text>}
-            <Stack gap="sm">
-              {activities.fields.map((f, i) => (
-                <Grid key={f.id} align="flex-end">
-                  <Grid.Col span={{ base: 12, sm: 3 }}>
-                    <Controller
-                      control={control}
-                      name={`activities.${i}.cnae`}
-                      render={({ field }) => (
-                        <TextInput label={i === 0 ? 'CNAE' : undefined} aria-label="CNAE" placeholder="0000-0/00" {...field} value={maskCnae(field.value ?? '')} error={formState.errors.activities?.[i]?.cnae?.message} />
-                      )}
-                    />
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 12, sm: 6 }}>
-                    <TextInput label={i === 0 ? 'Descrição' : undefined} aria-label="Descrição da atividade" {...register(`activities.${i}.description`)} error={formState.errors.activities?.[i]?.description?.message} />
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 9, sm: 2 }}>
-                    <Controller
-                      control={control}
-                      name={`activities.${i}.isMain`}
-                      render={({ field }) => (
-                        <Checkbox
-                          label="Principal"
-                          mb={8}
-                          checked={field.value}
-                          onChange={(e) => {
-                            const checked = e.currentTarget.checked;
-                            if (checked) activities.fields.forEach((_, j) => j !== i && setValue(`activities.${j}.isMain`, false));
-                            field.onChange(checked);
-                          }}
-                        />
-                      )}
-                    />
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 3, sm: 1 }}>
-                    <Tooltip label="Remover">
-                      <ActionIcon variant="subtle" color="red" mb={6} aria-label="Remover atividade" onClick={() => activities.remove(i)}><IconTrash size={16} /></ActionIcon>
-                    </Tooltip>
-                  </Grid.Col>
-                </Grid>
-              ))}
-            </Stack>
-          </Card>
+          <ActivitiesEditor
+            mode="enterprise"
+            control={control}
+            setValue={setValue}
+            errors={formState.errors.activities}
+            description="Ao informar o CNAE, a descrição é preenchida pela tabela do IBGE (pode ser ajustada)."
+            onCopy={selectedClient.data && (selectedClient.data.mainCnae || selectedClient.data.secondaryCnaes.length) ? copyClientActivities : undefined}
+            copyLabel="Copiar CNAEs do cliente"
+          />
 
           <Card withBorder padding="lg">
             <Textarea label="Observações" autosize minRows={3} {...register('notes')} />
