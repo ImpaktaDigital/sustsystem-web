@@ -4,10 +4,10 @@ import {
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
-import { IconCheck, IconLink, IconMap2, IconPlus, IconX } from '@tabler/icons-react';
+import { IconCheck, IconLink, IconMap2, IconPlus, IconTrash, IconX } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import {
   ENTERPRISE_TYPE_LABELS, SOURCE_METHOD_LABELS, SURVEY_STATUS_LABELS, type AreaType, type Client, type ElementType, type Enterprise,
@@ -211,6 +211,26 @@ export function SurveyDetailPage() {
     onError: (e) => notifyError(e),
   });
 
+  const navigate = useNavigate();
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/surveys/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['surveys'] });
+      queryClient.invalidateQueries({ queryKey: ['surveys-pending'] });
+      notifySuccess('Levantamento excluído');
+      navigate('/levantamentos');
+    },
+    onError: (e) => notifyError(e),
+  });
+  const confirmDelete = () =>
+    modals.openConfirmModal({
+      title: 'Excluir levantamento',
+      children: <Text fz="sm">O levantamento <b>{survey?.title}</b>, seus itens e fotos serão excluídos definitivamente.</Text>,
+      labels: { confirm: 'Excluir', cancel: 'Cancelar' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => remove.mutate(),
+    });
+
   const confirmReject = () => {
     let reason = '';
     modals.openConfirmModal({
@@ -356,11 +376,15 @@ export function SurveyDetailPage() {
                       Aprovar
                     </Button>
                   </Group>
+                  <Button variant="subtle" color="red" size="xs" leftSection={<IconTrash size={14} />} onClick={confirmDelete} loading={remove.isPending}>Excluir levantamento</Button>
                 </Stack>
               ) : (
                 <Stack gap="xs">
                   {survey.reviewedBy && <Text fz="sm">{SURVEY_STATUS_LABELS[survey.status]} por {survey.reviewedBy.name} em {formatDateTime(survey.reviewedAt)}</Text>}
                   {survey.reviewNotes && <Text fz="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>{survey.reviewNotes}</Text>}
+                  {survey.status === 'REJECTED' && review && (
+                    <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />} onClick={confirmDelete} loading={remove.isPending}>Excluir levantamento</Button>
+                  )}
                   {survey.status === 'APPROVED' && survey.enterprise && (
                     <Button component={Link} to={`/empreendimentos/${survey.enterprise.id}/editor`} variant="light" leftSection={<IconMap2 size={16} />}>Abrir no editor geográfico</Button>
                   )}

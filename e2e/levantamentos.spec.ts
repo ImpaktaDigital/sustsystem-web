@@ -90,3 +90,19 @@ test('gestor faz a triagem: cadastra cliente/empreendimento do pré-cadastro e a
   await expect(page.getByRole('button', { name: 'Elemento Poço 01' })).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/41-levantamento-no-editor.png` });
 });
+
+test('gestor exclui um levantamento em triagem', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  await sendSurvey(request);
+  await page.goto('/login');
+  await page.getByLabel('E-mail').fill('gestor@sustsystem.dev');
+  await page.getByLabel('Senha').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await expect(page.getByRole('heading', { name: /^Olá,/ })).toBeVisible();
+  await page.getByRole('link', { name: /Levantamentos/ }).click();
+  await page.getByText(`Sítio Primeiro Contato ${unique}`).first().click();
+  await page.getByRole('button', { name: 'Excluir levantamento' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Excluir' }).click();
+  await expect(page.getByText('Levantamento excluído')).toBeVisible();
+  await expect(page).toHaveURL(/\/levantamentos$/);
+});

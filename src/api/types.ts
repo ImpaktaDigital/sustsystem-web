@@ -176,7 +176,7 @@ export interface EnterpriseFeatureCollection {
 
 // ───────────── Áreas (Parte 3) ─────────────
 
-export type AreaSourceMethod = 'MANUAL_WEB' | 'VERTEX_LIST' | 'IMPORT_FILE' | 'GPS_VERTICES' | 'GPS_WALK';
+export type AreaSourceMethod = 'MANUAL_WEB' | 'VERTEX_LIST' | 'IMPORT_FILE' | 'GPS_VERTICES' | 'GPS_WALK' | 'MEASURED';
 
 export const SOURCE_METHOD_LABELS: Record<AreaSourceMethod, string> = {
   MANUAL_WEB: 'Desenho no mapa',
@@ -184,6 +184,7 @@ export const SOURCE_METHOD_LABELS: Record<AreaSourceMethod, string> = {
   IMPORT_FILE: 'Importação de arquivo',
   GPS_VERTICES: 'Vértices por GPS',
   GPS_WALK: 'Percurso GPS',
+  MEASURED: 'Medidas no local (trena/laser)',
 };
 
 export interface PolygonGeometry {
